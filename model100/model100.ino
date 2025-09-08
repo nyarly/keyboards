@@ -329,15 +329,18 @@ static void anyKeyMacro(KeyEvent &event) {
   }
 }
 
-static void numoutMacro(uint8_t keyState) {
-  Macros.play(MACRODOWN(T(Enter), Tr(UnlockLayer(NUMPAD))));
+static void numoutMacro(KeyEvent &event) {
+  if (keyToggledOn(event.state)) {
+    Macros.play(MACRO(T(Enter), Tr(UnlockLayer(NUMPAD))));
+  }
 }
 
 /* This macro let's us use Fn to shift to the FUNCTION layer,
  * and Shift-Fn to shift to NUM
  */
-static void layerShiftMacro(uint8_t keyState) {
+static void layerShiftMacro(KeyEvent &event) {
   using kaleidoscope::Runtime;
+  using kaleidoscope::live_keys;
 
   bool isShift = false;
   bool wasShift = false;
@@ -353,21 +356,21 @@ static void layerShiftMacro(uint8_t keyState) {
     activeShift = rightShift;
   }
 
-  if( Runtime.device().isKeyswitchPressed(KeyAddr(0,7)) ||
-      Runtime.device().isKeyswitchPressed(KeyAddr(0,8))) {
+  if( Runtime.device().isKeyswitchPressed(leftShift) ||
+      Runtime.device().isKeyswitchPressed(rightShift)) {
       isShift = true;
   } else if (
-      Runtime.device().wasKeyswitchPressed(KeyAddr(0,7)) ||
-      Runtime.device().wasKeyswitchPressed(KeyAddr(0,8))) {
+      Runtime.device().wasKeyswitchPressed(leftShift) ||
+      Runtime.device().wasKeyswitchPressed(rightShift)) {
       wasShift = true;
   }
 
-  if (keyIsPressed(keyState)) {
+  if (keyIsPressed(event.state)) {
     if (wasShift) {
       Layer.deactivate(NUMPAD);
     }
     if (isShift) {
-      Runtime.device().maskKey(activeShift);
+      live_keys.mask(activeShift);
 
       if (!Layer.isActive(NUMPAD))
         Layer.activate(NUMPAD);
@@ -375,8 +378,7 @@ static void layerShiftMacro(uint8_t keyState) {
       if (!Layer.isActive(FUNCTION))
         Layer.activate(FUNCTION);
     }
-  } else if (keyToggledOff(keyState)) {
-      Runtime.device().unMaskKey(activeShift);
+  } else if (keyToggledOff(event.state)) {
       Layer.deactivate(NUMPAD);
       Layer.deactivate(FUNCTION);
     }
@@ -407,11 +409,11 @@ const macro_t *macroAction(uint8_t macro_id, KeyEvent &event) {
     break;
 
   case MACRO_NUMOUT:
-    numoutMacro(keyState);
+    numoutMacro(event);
     break;
 
   case MACRO_LAYERSHIFT:
-    layerShiftMacro(keyState);
+    layerShiftMacro(event);
     break;
 
   }
