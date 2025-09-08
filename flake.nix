@@ -23,6 +23,7 @@
             (pkgs.mkShell {
               buildInputs = with pkgs; [
                 arduino
+                arduino-cli
                 gitAndTools.git-filter-repo
               ];
 
