@@ -229,14 +229,14 @@ KEYMAPS(
    ___,               Key_Underscore,  Key_Plus,        Key_LeftCurlyBracket,  Key_RightCurlyBracket,  Key_DoubleQuote,  ___,
    ___,               Key_Minus,       Key_Equals,      Key_LeftParen,         Key_RightParen,         Key_Quote,
    ___,               Key_LeftAngle,   Key_RightAngle,  Key_LeftBracket,       Key_RightBracket,       Key_Pipe,         ___,
-   ShiftToLayer(NUMPAD),               ___,             ___,             ___,
+   ___,               ___,             ___,             ___,
    ___,
 
      Consumer_ScanPreviousTrack,  Key_F6,           Key_F7,                    Key_F8,                    Key_F9,          Key_F10,           Key_F11,
      Consumer_PlaySlashPause,     Key_Home,         Key_PageDown,              Key_PageUp,                Key_End,         Key_RightBracket,  Key_F12,
      /*dead ,                     */Key_LeftArrow,  Key_DownArrow,             Key_UpArrow,               Key_RightArrow,  ___,               ___,
      Consumer_ScanNextTrack,      Consumer_Mute,    Consumer_VolumeDecrement,  Consumer_VolumeIncrement,  ___,             Key_Backslash,     Key_Pipe,
-     ___,                         ___,              Key_Delete,                ShiftToLayer(NUMPAD),
+     ___,                         ___,              Key_Delete,                ___,
      ___),
 
   [NUMPAD] =  KEYMAP_STACKED
@@ -523,10 +523,102 @@ USE_MAGIC_COMBOS({.action = toggleKeyboardProtocol,
                   .keys = {R3C6, R0C0, R3C7}},
                  );
 
+// JDL attempt to handle modified Fun key
+#define LFUN KeyAddr(3,6)
+#define RFUN KeyAddr(3,9)
+#define LSHIFT KeyAddr(3,7)
+#define RSHIFT KeyAddr(3,8)
+// (0, 7) (1, 7) (2, 7) (3, 7) | (3, 8) (2, 8)  (1, 8)  (0, 8)
+//                      (3, 6) | (3, 9)
+//
+
+namespace kaleidoscope {
+  namespace plugin {
+
+
+  class ShiftedFun : public Plugin {
+  public:
+    EventHandlerResult onKeyEvent(KeyEvent &event) {
+      bool shiftHeld = false;
+
+      //    keyFromKeymap(layer, key_addr)
+      if (event.addr == LFUN || event.addr == RFUN) {
+        if (keyToggledOn(event.state)) {
+
+        // If a Fun is pressed, consider layer, and set that ShiftToLayer on key
+          if (live_keys[LSHIFT] != Key_Inactive && live_keys[LSHIFT] != Key_Masked) {
+            shiftHeld = true;
+            live_keys.mask(LSHIFT);
+          }
+          if (live_keys[RSHIFT] != Key_Inactive && live_keys[RSHIFT] != Key_Masked) {
+            shiftHeld = true;
+            live_keys.mask(RSHIFT);
+          }
+          if (shiftHeld) {
+            Layer.activate(NUMPAD);
+            live_keys.activate(event.addr, ShiftToLayer(NUMPAD));
+          } else {
+            Layer.activate(FUNCTION);
+            live_keys.activate(event.addr, ShiftToLayer(FUNCTION));
+          }
+        } else {
+          Layer.deactivate(NUMPAD);
+          Layer.deactivate(FUNCTION);
+        // If a Fun is released, undo whatever else we've done
+        //    if Shift is live, set to Key_LShift (or R)
+          if (live_keys[LSHIFT] != Key_Masked) {
+            live_keys.activate(LSHIFT, keyFromKeymap(PRIMARY, LSHIFT));
+          }
+          if (live_keys[RSHIFT] != Key_Masked) {
+            live_keys.activate(RSHIFT, keyFromKeymap(PRIMARY, RSHIFT));
+          }
+        }
+      }
+
+      if (event.addr == LSHIFT || event.addr == RSHIFT) {
+        if (keyToggledOn(event.state)) {
+        // If Shift is pressed, see if Fun is live - if not ignore
+        //    if so, set pressed FUN to ShiftToLayer(NUMPAD)
+        //      and mask this Shift
+          if (live_keys[LFUN] != Key_Inactive && live_keys[LFUN] != Key_Masked) {
+            live_keys.mask(event.addr);
+            Layer.activate(NUMPAD);
+            live_keys.activate(LFUN, ShiftToLayer(NUMPAD));
+          }
+          if (live_keys[RFUN] != Key_Inactive && live_keys[RFUN] != Key_Masked) {
+            live_keys.mask(event.addr);
+            Layer.activate(NUMPAD);
+            live_keys.activate(LFUN, ShiftToLayer(NUMPAD));
+          }
+        } else {
+        // If Shift is released, see if Fun is live
+        //    if so, set pressed FUN to ShiftToLayer(PRIMARY)
+          if (live_keys[LFUN] != Key_Inactive && live_keys[LFUN] != Key_Masked) {
+            Layer.deactivate(NUMPAD);
+            Layer.activate(FUNCTION);
+            live_keys.activate(LFUN, ShiftToLayer(FUNCTION));
+          }
+          if (live_keys[RFUN] != Key_Inactive && live_keys[RFUN] != Key_Masked) {
+            Layer.deactivate(NUMPAD);
+            Layer.activate(FUNCTION);
+            live_keys.activate(LFUN, ShiftToLayer(FUNCTION));
+          }
+        }
+
+      }
+      return EventHandlerResult::OK;
+    }
+  };
+
+}
+}
+kaleidoscope::plugin::ShiftedFun ShiftedFun;
+
 // First, tell Kaleidoscope which plugins you want to use.
 // The order can be important. For example, LED effects are
 // added in the order they're listed here.
 KALEIDOSCOPE_INIT_PLUGINS(
+  ShiftedFun,
   // ----------------------------------------------------------------------
   // Chrysalis plugins
 
@@ -571,6 +663,12 @@ KALEIDOSCOPE_INIT_PLUGINS(
   // performed when tapped, but the secondary action when held.
   Qukeys,
   Chord,
+
+  // SpaceCadet can turn your shifts into parens on tap, while keeping them as
+  // Shifts when held. SpaceCadetConfig lets Chrysalis configure some aspects of
+  // the plugin.
+  // SpaceCadet,
+  // SpaceCadetConfig,
 
   // Enables the "Sticky" behavior for modifiers, and the "Layer shift when
   // held" functionality for layer keys.
@@ -689,17 +787,10 @@ void setup() {
     kaleidoscope::plugin::Qukey(0, KeyAddr(2, 9), Key_Enter),
   )
 
-  CHORDS(
-      CHORD(ShiftToLayer(FUNCTION), Key_LeftShift), ShiftToLayer(NUMPAD),
-      CHORD(ShiftToLayer(FUNCTION), Key_RightShift), ShiftToLayer(NUMPAD),
-      CHORD(ShiftToLayer(FUNCTION), Key_LeftAlt, Key_LeftShift), ShiftToLayer(MOUSE),
-      CHORD(ShiftToLayer(FUNCTION), Key_RightAlt, Key_RightShift), ShiftToLayer(MOUSE),
-  )
-
   // First, call Kaleidoscope's internal setup function
   Kaleidoscope.setup();
 
-  Chord.setTimeout(50);
+  // Chord.setTimeout(50);
 
   MouseKeys.setWarpGridSize(MOUSE_WARP_GRID_3X3);
 
